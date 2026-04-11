@@ -1,6 +1,6 @@
 /*
  * RomRaider Open-Source Tuning, Logging and Reflashing
- * Copyright (C) 2006-2022 RomRaider.com
+ * Copyright (C) 2006-2026 RomRaider.com
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,9 +61,9 @@ public abstract class TableView extends JPanel implements Serializable {
 
     protected Table table;
     protected TableView parent;
-    protected PresetPanel presetPanel;   
+    protected PresetPanel presetPanel;
     protected DataCellView[] data;
-    
+
     protected boolean hide; //Hide the actual data
     protected BorderLayout borderLayout = new BorderLayout();
     protected GridLayout centerLayout = new GridLayout(1, 1, 0, 0);
@@ -76,25 +76,25 @@ public abstract class TableView extends JPanel implements Serializable {
     protected int minHeight = 100;
     protected int minWidthNoOverlay = 465;
     protected int minWidthOverlay = 700;
-    
+
     protected int highlightBeginX;
     protected int highlightBeginY;
-    
+
     protected boolean highlight = false;
     protected boolean overlayLog = false;
     protected String liveAxisValue = Settings.BLANK;
     protected int liveDataIndex = 0;
     protected int previousLiveDataIndex = 0;
-  
+
     protected Settings.CompareDisplay compareDisplay = Settings.CompareDisplay.ABSOLUTE;
 
-    protected TableView(Table table) {    	
+    protected TableView(Table table) {
     	this.table = table;
-    	   	
+
         this.setLayout(borderLayout);
         this.add(centerPanel, BorderLayout.CENTER);
         centerPanel.setVisible(true);
-                    
+
         // key binding actions
         Action rightAction = new AbstractAction() {
             private static final long serialVersionUID = 1042884198300385041L;
@@ -296,6 +296,14 @@ public abstract class TableView extends JPanel implements Serializable {
                 getToolbar().focusSetValue('.');
             }
         };
+        Action numNegAction = new AbstractAction() {
+            private static final long serialVersionUID = -7532750245035640773L;
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                getToolbar().focusSetValue('-');
+            }
+        };
         Action copyAction = new AbstractAction() {
             private static final long serialVersionUID = -6978981449261938672L;
 
@@ -316,11 +324,11 @@ public abstract class TableView extends JPanel implements Serializable {
 				}
             }
         };
-     
+
         class InterpolateAction extends AbstractAction{
             private static final long serialVersionUID = -2357532575392447149L;
             Table t;
-            
+
             public InterpolateAction(Table t) {
             	this.t = t;
             }
@@ -332,14 +340,14 @@ public abstract class TableView extends JPanel implements Serializable {
 				showInvalidUserLevelPopup(e1);
 			}
             }
-        };
-        
+        }
+
         Action interpolate = new InterpolateAction(table);
-        
+
         class VerticalInterpolateAction extends  AbstractAction {
             private static final long serialVersionUID = -2375322575392447149L;
             Table t;
-            
+
             public VerticalInterpolateAction(Table t) {
             	this.t = t;
             }
@@ -351,18 +359,18 @@ public abstract class TableView extends JPanel implements Serializable {
 					showInvalidUserLevelPopup(e1);
 				}
             }
-        };
-        
+        }
+
         Action verticalInterpolate = new VerticalInterpolateAction(table);
 
         class HorizontalInterpolateAction extends AbstractAction {
             private static final long serialVersionUID = -6346750245035640773L;
             Table t;
-                    
+
             public HorizontalInterpolateAction(Table t) {
             	this.t = t;
             }
-            
+
             @Override
             public void actionPerformed(ActionEvent e) {
                 try {
@@ -371,12 +379,12 @@ public abstract class TableView extends JPanel implements Serializable {
 					showInvalidUserLevelPopup(e1);
 				}
             }
-        };
-        
+        }
+
         Action horizontalInterpolate = new HorizontalInterpolateAction(table);
-        		
+
         class MultiplyAction extends AbstractAction {
-            private static final long serialVersionUID = -2753212575392447149L;                       
+            private static final long serialVersionUID = -2753212575392447149L;
             @Override
             public void actionPerformed(ActionEvent e) {
                 try {
@@ -385,18 +393,9 @@ public abstract class TableView extends JPanel implements Serializable {
     				showInvalidUserLevelPopup(e1);
     			}
             }
-        };
-        
-        Action multiplyAction = new MultiplyAction();
-        
-        Action numNegAction = new AbstractAction() {
-            private static final long serialVersionUID = -7532750245035640773L;
+        }
 
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                getToolbar().focusSetValue('-');
-            }
-        };
+        Action multiplyAction = new MultiplyAction();
 
         // set input mapping
         InputMap im = getInputMap(WHEN_IN_FOCUSED_WINDOW);
@@ -409,7 +408,7 @@ public abstract class TableView extends JPanel implements Serializable {
         KeyStroke shiftLeft = KeyStroke.getKeyStroke(KeyEvent.VK_LEFT,  KeyEvent.SHIFT_DOWN_MASK);
         KeyStroke shiftUp = KeyStroke.getKeyStroke(KeyEvent.VK_UP,  KeyEvent.SHIFT_DOWN_MASK);
         KeyStroke shiftDown = KeyStroke.getKeyStroke(KeyEvent.VK_DOWN,  KeyEvent.SHIFT_DOWN_MASK);
-        KeyStroke decrement = KeyStroke.getKeyStroke('-');
+        KeyStroke decrement = KeyStroke.getKeyStroke('_');
         KeyStroke increment = KeyStroke.getKeyStroke('+');
         KeyStroke decrement2 = KeyStroke.getKeyStroke("control DOWN");
         KeyStroke increment2 = KeyStroke.getKeyStroke("control UP");
@@ -417,6 +416,8 @@ public abstract class TableView extends JPanel implements Serializable {
         KeyStroke increment3 = KeyStroke.getKeyStroke(KeyEvent.VK_PLUS, KeyEvent.CTRL_DOWN_MASK);
         KeyStroke decrement4 = KeyStroke.getKeyStroke("control shift DOWN");
         KeyStroke increment4 = KeyStroke.getKeyStroke("control shift UP");
+        KeyStroke decrement5 = KeyStroke.getKeyStroke('[');
+        KeyStroke increment5 = KeyStroke.getKeyStroke(']');
         KeyStroke num0 = KeyStroke.getKeyStroke('0');
         KeyStroke num1 = KeyStroke.getKeyStroke('1');
         KeyStroke num2 = KeyStroke.getKeyStroke('2');
@@ -453,6 +454,8 @@ public abstract class TableView extends JPanel implements Serializable {
         im.put(decrement3, "decFineAction");
         im.put(increment4, "incFineAction");
         im.put(decrement4, "decFineAction");
+        im.put(increment5, "incFineAction");
+        im.put(decrement5, "decFineAction");
         im.put(num0, "num0Action");
         im.put(num1, "num1Action");
         im.put(num2, "num2Action");
@@ -489,6 +492,8 @@ public abstract class TableView extends JPanel implements Serializable {
         getActionMap().put(im.get(decrement3), decFineAction);
         getActionMap().put(im.get(increment4), incFineAction);
         getActionMap().put(im.get(decrement4), decFineAction);
+        getActionMap().put(im.get(increment5), incFineAction);
+        getActionMap().put(im.get(decrement5), decFineAction);
         getActionMap().put(im.get(num0), num0Action);
         getActionMap().put(im.get(num1), num1Action);
         getActionMap().put(im.get(num2), num2Action);
@@ -511,27 +516,27 @@ public abstract class TableView extends JPanel implements Serializable {
 
         this.setInputMap(WHEN_FOCUSED, im);
     }
-      
+
     public TableFrame getFrame() {
     	return table.getTableFrame();
     }
-    
+
     public TableView getAxisParent() {
     	return parent;
     }
-    
+
     public void setAxisParent(TableView v) {
     	this.parent = v;
     }
-    
+
     public void setTable(Table t) {
     	 this.table = t;
     }
-    
+
     public Table getTable() {
     	return this.table;
     }
-    
+
     public DataCellView[] getData() {
         return data;
     }
@@ -543,14 +548,14 @@ public abstract class TableView extends JPanel implements Serializable {
     public DataCellView getDataCell(int location) {
         return data[location];
     }
-    
+
     public boolean isHidden() {
     	return hide;
     }
-    
+
     public void setHidden(boolean b) {
     	this.hide = b;
-    	
+
     	if(this.hide!=b) {
     		if(!b) {
     			data = null;
@@ -560,17 +565,17 @@ public abstract class TableView extends JPanel implements Serializable {
     		}
     	}
     }
-    
+
     @Override
     public String toString() {
         return table.toString();
     }
-    
+
     public void updatePresetPanel() {
     	if(presetPanel != null)
     		presetPanel.repaint();
     }
-    
+
     public void drawTable() {
     	updateTableLabel();
 
@@ -582,18 +587,18 @@ public abstract class TableView extends JPanel implements Serializable {
 	        }
     	}
     }
-    
+
     protected void addPresetPanel(PresetManager m) {
     	 presetPanel = new PresetPanel(this, m);
     }
-    
+
     public void populateTableVisual() {
     	//Populate Views from table here
     	if(getTable().presetManager != null) addPresetPanel(getTable().presetManager);
-    	
+
     	if(!isHidden() && table.getData() != null) {
 	    	data = new DataCellView[table.getDataSize()];
-	
+
 	    	for(int i= 0; i < table.getDataSize(); i++) {
 	    		DataCell c = table.getData()[i];
 	    		if (c!=null) {
@@ -602,7 +607,7 @@ public abstract class TableView extends JPanel implements Serializable {
 	    	}
     	}
     }
-    
+
     public Dimension getFrameSize() {
         int height = verticalOverhead + cellHeight;
         int width = horizontalOverhead + data.length * cellWidth;
@@ -618,13 +623,13 @@ public abstract class TableView extends JPanel implements Serializable {
 
     public void startHighlight(int x, int y) {
         this.highlightBeginY = y;
-        this.highlightBeginX = x;        
+        this.highlightBeginX = x;
         highlight = true;
         highlight(x, y);
     }
 
     public void highlight(int x, int y) {
-        if (highlight) {         	
+        if (highlight) {
             for (int i = 0; i < data.length; i++) {
                 if ((i >= highlightBeginY && i <= y) || (i <= highlightBeginY && i >= y)) {
                     data[i].setHighlighted(true);
@@ -661,7 +666,7 @@ public abstract class TableView extends JPanel implements Serializable {
     public abstract void shiftCursorLeft();
 
     public abstract void shiftCursorRight();
- 
+
     public void undoSelected() throws UserLevelException {
         for (DataCellView cell : data) {
             // reset current value to original value
@@ -670,14 +675,14 @@ public abstract class TableView extends JPanel implements Serializable {
             }
         }
     }
-    
+
     public static void showInvalidUserLevelPopup(UserLevelException e) {
         JOptionPane.showMessageDialog(null, MessageFormat.format(
                 rb.getString("USERLVLTOLOW"), e.getLevel()),
                 rb.getString("TBLNOTMODIFY"),
                 JOptionPane.INFORMATION_MESSAGE);
     }
-      
+
     @Override
     public void addKeyListener(KeyListener listener) {
         super.addKeyListener(listener);
@@ -685,10 +690,10 @@ public abstract class TableView extends JPanel implements Serializable {
         	cell.addKeyListener(listener);
         }
     }
-    
+
     public void copySelection() {
         StringBuilder output =  new StringBuilder("[Selection1D]" + Settings.NEW_LINE);
-        
+
         boolean copy = false;
         int[] coords = new int[2];
         coords[0] = table.getDataSize();
@@ -705,7 +710,7 @@ public abstract class TableView extends JPanel implements Serializable {
                 }
             }
         }
-        
+
         //Make a string of the selection
         for (int i = coords[0]; i <= coords[1]; i++) {
             if (getData()[i].isSelected()) {
@@ -717,32 +722,32 @@ public abstract class TableView extends JPanel implements Serializable {
             	output.append("\t");
             }
         }
-        
+
         //Copy to clipboard
         if (copy) {
             setClipboard(output.toString());
-        } 
+        }
     }
-    
+
     //TODO: Clean this up
     protected void setClipboard(String s) {
         try {
             Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(s), null);
          } catch(IllegalStateException e) {
-        	 
+
              try {
 				Thread.sleep(20);
 			} catch (InterruptedException e1) {}
-             
+
              Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(s), null);
          }
     }
-    
+
     public void copyTable() {
         String tableHeader = table.getSettings().getTableHeader();
         StringBuffer output = new StringBuffer(tableHeader);
         output.append(table.getTableAsString());
-        
+
         setClipboard(String.valueOf(output));
     }
 
@@ -762,7 +767,7 @@ public abstract class TableView extends JPanel implements Serializable {
 
     public void paste() throws UserLevelException {
     	String input;
-    	
+
         try {
             input = (String) Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null).getTransferData(DataFlavor.stringFlavor);
         } catch (UnsupportedFlavorException ex) {
@@ -770,29 +775,29 @@ public abstract class TableView extends JPanel implements Serializable {
         } catch (IOException ex) {
         	return;
         }
-        
+
         paste(input);
     }
-    
+
     public void paste(String s) throws UserLevelException {
     	StringTokenizer st = new StringTokenizer(s, Table.ST_DELIMITER);
-        
-        if (!table.isStaticDataTable()) {  
+
+        if (!table.isStaticDataTable()) {
             String pasteType = st.nextToken();
             boolean selectedOnly = false;
             if ("[Selection1D]".equalsIgnoreCase(pasteType)) selectedOnly = true;
-            
+
             if ("[Table1D]".equalsIgnoreCase(pasteType) || "[Selection1D]".equalsIgnoreCase(pasteType)) {
-            	
+
             	//Find the leftmost selected cell as start
-            	int startSelection = 0;           	
+            	int startSelection = 0;
             	for(int i=0; i < data.length;i++) {
             		if(data[i].isSelected()) {
             			startSelection=i;
             			break;
             		}
             	}
-            	
+
                 if ((selectedOnly && data[startSelection].isSelected()) || !selectedOnly) {
                     int i = 0;
                     while (st.hasMoreTokens()) {
@@ -810,7 +815,7 @@ public abstract class TableView extends JPanel implements Serializable {
             }
         }
     }
-    
+
     public void setCompareDisplay(Settings.CompareDisplay compareDisplay) {
         this.compareDisplay = compareDisplay;
         drawTable();
@@ -819,7 +824,7 @@ public abstract class TableView extends JPanel implements Serializable {
     public Settings.CompareDisplay getCompareDisplay() {
         return this.compareDisplay;
     }
-    
+
     public static Settings getSettings()
     {
         return SettingsManager.getSettings();
@@ -832,7 +837,7 @@ public abstract class TableView extends JPanel implements Serializable {
 
     public void setOverlayLog(boolean overlayLog) {
         this.overlayLog = overlayLog;
-        
+
         if(!overlayLog)
         {
         	clearLiveDataTrace();
@@ -862,7 +867,7 @@ public abstract class TableView extends JPanel implements Serializable {
         this.previousLiveDataIndex = this.liveDataIndex;
         this.liveDataIndex = index;
     }
-    
+
     public double getLiveAxisValue() {
         try {
             return Double.parseDouble(liveAxisValue);
@@ -870,7 +875,7 @@ public abstract class TableView extends JPanel implements Serializable {
             return 0.0;
         }
     }
-    
+
 
     public void highlightLiveData(String liveVal) {
         if (getOverlayLog()) {
@@ -922,7 +927,7 @@ public abstract class TableView extends JPanel implements Serializable {
     public void updateTableLabel() {
     	if(tableLabel != null) {
 	        if(null == table.name || table.name.isEmpty()) {
-	            ;// Do not update label.
+	            // Do not update label.
 	        } else if(null == table.getCurrentScale () || "0x" == table.getCurrentScale().getUnit()) {
 	            // static or no scale exists.
 	            tableLabel.setText(getName());
@@ -931,11 +936,12 @@ public abstract class TableView extends JPanel implements Serializable {
 	        }
     	}
     }
-    
+
+    @Override
     public String getName() {
     	return table.getName();
     }
-    
+
     public static void showBadScalePopup(Table table, Scale scale) {
         JPanel panel = new JPanel();
         panel.setLayout(new GridLayout(4, 1));
@@ -949,8 +955,8 @@ public abstract class TableView extends JPanel implements Serializable {
         JCheckBox check = new JCheckBox(rb.getString("DISPLAYMSG"), true);
         check.setHorizontalAlignment(JCheckBox.RIGHT);
         panel.add(check);
-        
-        
+
+
         check.addActionListener(
                 new ActionListener() {
                     @Override
