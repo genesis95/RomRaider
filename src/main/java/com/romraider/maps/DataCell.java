@@ -57,8 +57,15 @@ public class DataCell implements Serializable  {
     private String staticText = null;
     private Rom rom;
 
-    //Index within table
+    //Index within table - used for ROM byte address calculation:
+    //   byteAddress = storageAddress + index * storageType
+    // When an axis has skipCells > 0 this will differ from logicalIndex.
     private int index;
+
+    // Logical (grid/UI) position of this cell within its table (0, 1, 2, …).
+    // Always sequential regardless of skipCells; used by DataCellView for
+    // rendering position and by callers that need "which slot is this cell".
+    private int logicalIndex;
 
     public DataCell(Table table, Rom rom) {
         this.table = table;
@@ -77,10 +84,32 @@ public class DataCell implements Serializable  {
     public DataCell(Table table, int index, Rom rom) {
         this(table, rom);
         this.index = index;
+        this.logicalIndex = index; // default: same as byte index (no skip)
 
         updateBinValueFromMemory();
         this.originalValue = this.binValue;
         registerDataCell(this);
+    }
+
+    /**
+     * Constructor used when skipCells > 0 on an axis: the byte-addressing
+     * index differs from the sequential grid position.
+     *
+     * @param logicalIndex  sequential slot number (0, 1, 2 …) — used by UI
+     * @param byteIndex     ROM-address index (accounts for skip stride) — used for reads/writes
+     */
+    public DataCell(Table table, int logicalIndex, int byteIndex, Rom rom) {
+        this(table, rom);
+        this.logicalIndex = logicalIndex;
+        this.index = byteIndex;
+
+        updateBinValueFromMemory();
+        this.originalValue = this.binValue;
+        registerDataCell(this);
+    }
+
+    public int getLogicalIndex() {
+        return logicalIndex;
     }
 
     public void setTable(Table t) {
