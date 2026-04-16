@@ -253,6 +253,12 @@ public class TableScaleUnmarshaller {
 
                             tempTable.setData(((Table3D) table).getXAxis().getData());
 
+                            // Apply skipCells to the X axis if declared on the nested element
+                            if (tempTable instanceof Table1D) {
+                                ((Table1D) tempTable).setSkipCells(
+                                        unmarshallAttribute(n, "skipCells", ((Table1D) tempTable).getSkipCells()));
+                            }
+
                             ((Table3D) table).setXAxis((Table1D)tempTable);
                         }
                         else if (RomAttributeParser
@@ -266,6 +272,13 @@ public class TableScaleUnmarshaller {
                             }
 
                             tempTable.setData(((Table3D) table).getYAxis().getData());
+
+                            // Apply skipCells to the Y axis if declared on the nested element
+                            if (tempTable instanceof Table1D) {
+                                ((Table1D) tempTable).setSkipCells(
+                                        unmarshallAttribute(n, "skipCells", ((Table1D) tempTable).getSkipCells()));
+                            }
+
                             ((Table3D) table).setYAxis((Table1D)tempTable);
                         }
                     }
