@@ -45,21 +45,16 @@ public class Table1D extends Table {
 
     /**
      * Override populateTable so that, when skipCells > 0, each DataCell
-     * receives a byte-adjusted logical index that skips the dummy bytes.
+     * receives an exact pre-computed byte offset instead of a logical index.
+     * This eliminates the integer-division truncation that occurred when
+     * (storageType + skipCells) did not divide evenly into storageType units.
      *
-     * Without skip:  index passed to DataCell = 0, 1, 2, 3 …
-     *   → byte addr = storageAddress + index * storageType
+     * Example — storageType=1, skipCells=1 (ROM: [Data][Dummy][Data][Dummy]…):
+     *   exactByteOffset = 0, 2, 4, 6 …  → reads at storageAddress+0, +2, +4, +6 ✓
      *
-     * With skipCells=1 (one dummy byte after every real byte, storageType=1):
-     *   index passed = 0, 2, 4, 6 …
-     *   → byte addr = storageAddress + 0, +2, +4, +6 …  ✓
-     *
-     * The stride multiplier expressed in "storageType units" is:
-     *   (storageType + skipCells) / storageType
-     * which simplifies to passing  i * (storageType + skipCells) / storageType
-     * as the logical index.  To avoid floating-point rounding we pass
-     *   i * strideBytes / storageType
-     * where strideBytes = storageType + skipCells.
+     * Note: getStorageType() must return a real integer byte width (1, 2, 4).
+     * Float (sentinel 99) and MOVI20 (sentinel 20/28) axes with skipCells are
+     * not a supported combination.
      */
     @Override
     public void populateTable(Rom rom) throws ArrayIndexOutOfBoundsException, IndexOutOfBoundsException {
@@ -79,16 +74,11 @@ public class Table1D extends Table {
             this.ramOffset = rom.getRomID().getRamOffset();
         }
 
-        int storageType = getStorageType();
-        // strideBytes is the total number of bytes consumed per logical cell
-        // (the real data bytes + the dummy skip bytes).
-        int strideBytes = storageType + skipCells;
-
         for (int i = 0; i < data.length; i++) {
-            // i            = logical grid position (always sequential: 0, 1, 2 …)
-            // adjustedIndex = byte-addressing index that skips dummy bytes
-            int adjustedIndex = (i * strideBytes) / storageType;
-            data[i] = new DataCell(this, i, adjustedIndex, rom);
+            // Exact byte distance from storageAddress to this cell — no division,
+            // no truncation regardless of stride alignment.
+            int exactByteOffset = i * (getStorageType() + skipCells);
+            data[i] = new DataCell(this, i, exactByteOffset, rom, true);
         }
 
         locked = tempLock;

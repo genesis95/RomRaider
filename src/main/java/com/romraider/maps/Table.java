@@ -660,11 +660,15 @@ public abstract class Table implements Serializable, Comparable<Table> {
     }
 
     public void setRealValue(String realValue) throws UserLevelException {
+        boolean anySelected = false;
         for(DataCell cell : data) {
             if (cell.isSelected()) {
+                anySelected = true;
                 cell.setRealValue(realValue);
             }
         }
+        if (!anySelected && LOGGER.isDebugEnabled())
+            LOGGER.debug("setRealValue: no cells selected in table=" + getName());
     }
 
     public abstract boolean isLiveDataSupported();

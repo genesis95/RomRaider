@@ -57,15 +57,18 @@ public class DataCell implements Serializable  {
     private String staticText = null;
     private Rom rom;
 
-    //Index within table - used for ROM byte address calculation:
-    //   byteAddress = storageAddress + index * storageType
-    // When an axis has skipCells > 0 this will differ from logicalIndex.
+    // Sequential grid/UI slot number (0, 1, 2 …). Always contiguous regardless
+    // of skipCells. Preserved for API compat via getIndexInTable().
     private int index;
 
-    // Logical (grid/UI) position of this cell within its table (0, 1, 2, …).
-    // Always sequential regardless of skipCells; used by DataCellView for
-    // rendering position and by callers that need "which slot is this cell".
+    // Same as index for standard tables; the sequential UI slot for skip-cell
+    // tables. Used by Bosch-subtract loop bounds and neighbour references.
     private int logicalIndex;
+
+    // Exact byte distance from storageAddress to this cell's first byte.
+    // Replaces all "index * storageType" arithmetic so skipCells strides are
+    // exact even when (storageType + skipCells) doesn't divide evenly.
+    private int byteOffset;
 
     public DataCell(Table table, Rom rom) {
         this.table = table;
@@ -84,7 +87,19 @@ public class DataCell implements Serializable  {
     public DataCell(Table table, int index, Rom rom) {
         this(table, rom);
         this.index = index;
-        this.logicalIndex = index; // default: same as byte index (no skip)
+        this.logicalIndex = index;
+
+        // Resolve the physical byte width for special storage-type sentinels.
+        int st = table.getStorageType();
+        int physicalWidth;
+        if (st == Settings.STORAGE_TYPE_FLOAT) {
+            physicalWidth = 4;
+        } else if (st == Settings.STORAGE_TYPE_MOVI20 || st == Settings.STORAGE_TYPE_MOVI20S) {
+            physicalWidth = 3;
+        } else {
+            physicalWidth = st;
+        }
+        this.byteOffset = index * physicalWidth;
 
         updateBinValueFromMemory();
         this.originalValue = this.binValue;
@@ -92,16 +107,19 @@ public class DataCell implements Serializable  {
     }
 
     /**
-     * Constructor used when skipCells > 0 on an axis: the byte-addressing
-     * index differs from the sequential grid position.
+     * Constructor for tables with skipCells > 0: the caller supplies the
+     * exact pre-computed byte offset so no integer-division truncation occurs.
      *
-     * @param logicalIndex  sequential slot number (0, 1, 2 …) — used by UI
-     * @param byteIndex     ROM-address index (accounts for skip stride) — used for reads/writes
+     * @param logicalIndex      sequential UI slot (0, 1, 2 …)
+     * @param byteOffset        exact byte distance from storageAddress to this cell
+     * @param isAbsoluteOffset  must be {@code true}; signals that byteOffset is
+     *                          already a physical byte distance, not a cell index
      */
-    public DataCell(Table table, int logicalIndex, int byteIndex, Rom rom) {
+    public DataCell(Table table, int logicalIndex, int byteOffset, Rom rom, boolean isAbsoluteOffset) {
         this(table, rom);
         this.logicalIndex = logicalIndex;
-        this.index = byteIndex;
+        this.index = logicalIndex;
+        this.byteOffset = byteOffset;
 
         updateBinValueFromMemory();
         this.originalValue = this.binValue;
@@ -110,6 +128,10 @@ public class DataCell implements Serializable  {
 
     public int getLogicalIndex() {
         return logicalIndex;
+    }
+
+    public int getByteOffset() {
+        return byteOffset;
     }
 
     public void setTable(Table t) {
@@ -177,7 +199,7 @@ public class DataCell implements Serializable  {
         }
     }
 
-    private double getValueFromMemory(int index) {
+    private double getValueAtByteOffset(int targetByteOffset) {
         double dataValue = 0.0;
         byte[] input = getBinary();
         int storageType = table.getStorageType();
@@ -186,34 +208,32 @@ public class DataCell implements Serializable  {
         int storageAddress = table.getStorageAddress();
         boolean signed = table.isSignedData();
 
-        // populate data cells
-        if (storageType == Settings.STORAGE_TYPE_FLOAT) { //float storage type
+        if (storageType == Settings.STORAGE_TYPE_FLOAT) {
             byte[] byteValue = new byte[4];
-            byteValue[0] = input[storageAddress + index * 4 - table.getRamOffset()];
-            byteValue[1] = input[storageAddress + index * 4 - table.getRamOffset() + 1];
-            byteValue[2] = input[storageAddress + index * 4 - table.getRamOffset() + 2];
-            byteValue[3] = input[storageAddress + index * 4 - table.getRamOffset() + 3];
+            byteValue[0] = input[storageAddress + targetByteOffset - ramOffset];
+            byteValue[1] = input[storageAddress + targetByteOffset - ramOffset + 1];
+            byteValue[2] = input[storageAddress + targetByteOffset - ramOffset + 2];
+            byteValue[3] = input[storageAddress + targetByteOffset - ramOffset + 3];
             dataValue = RomAttributeParser.byteToFloat(byteValue, table.getEndian(), table.getMemModelEndian());
 
         } else if (storageType == Settings.STORAGE_TYPE_MOVI20 ||
-                storageType == Settings.STORAGE_TYPE_MOVI20S) { // when data is in MOVI20 instruction
+                storageType == Settings.STORAGE_TYPE_MOVI20S) {
             dataValue = RomAttributeParser.parseByteValue(input,
                     endian,
-                    storageAddress + index * 3 - ramOffset,
+                    storageAddress + targetByteOffset - ramOffset,
                     storageType,
                     signed);
 
-        } else { // integer storage type
+        } else {
             if (bitMask == 0) {
                 dataValue = RomAttributeParser.parseByteValue(input,
-                        endian, storageAddress + index * storageType - ramOffset,
+                        endian, storageAddress + targetByteOffset - ramOffset,
                         storageType, signed);
-                }
-                else {
-                    dataValue = RomAttributeParser.parseByteValueMasked(input, endian,
-                            storageAddress + index * storageType - ramOffset,
-                            storageType, signed, bitMask);
-                }
+            } else {
+                dataValue = RomAttributeParser.parseByteValueMasked(input, endian,
+                        storageAddress + targetByteOffset - ramOffset,
+                        storageType, signed, bitMask);
+            }
         }
 
         return dataValue;
@@ -222,17 +242,17 @@ public class DataCell implements Serializable  {
     private double getValueFromMemory() {
         if (table.getDataLayout() == Table.DataLayout.BOSCH_SUBTRACT) {
 
-            //Bosch Motronic subtract method
-             double dataValue = Math.pow(2, 8 * table.getStorageType());
+            // Bosch Motronic subtract method: iterate by logical index to stay
+            // within bounds; fetch each cell's value via its own byteOffset.
+            double dataValue = Math.pow(2, 8 * table.getStorageType());
 
-            for (int j = table.data.length - 1; j >= index; j--) {
-                dataValue -= getValueFromMemory(j);
+            for (int j = table.data.length - 1; j >= logicalIndex; j--) {
+                dataValue -= getValueAtByteOffset(table.data[j].getByteOffset());
             }
 
             return dataValue;
-        }
-        else {
-            return getValueFromMemory(index);
+        } else {
+            return getValueAtByteOffset(this.byteOffset);
         }
     }
 
@@ -247,21 +267,35 @@ public class DataCell implements Serializable  {
         int storageAddress = table.getStorageAddress();
         boolean isBoschSubtract = table.getDataLayout() == Table.DataLayout.BOSCH_SUBTRACT;
 
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("saveBinValueInFile: table=" + table.getName()
+                    + " cell=" + logicalIndex + " byteOffset=" + byteOffset
+                    + " addr=" + (storageAddress + byteOffset - ramOffset)
+                    + " binValue=" + binValue
+                    + " userLevel=" + userLevel + " settingsUserLevel=" + getSettings().getUserLevel()
+                    + " binDataLen=" + (binData != null ? binData.length : "null"));
+
         double crossedValue = 0;
 
         //Do reverse cross referencing in for Bosch Subtract Axis array
         if (isBoschSubtract) {
-            for (int i = table.data.length - 1; i >=index ; i--) {
-                if (i == index)
+            for (int i = table.data.length - 1; i >= logicalIndex; i--) {
+                if (i == logicalIndex)
                     crossedValue -= table.data[i].getBinValue();
                 else if (i == table.data.length - 1)
-                    crossedValue = Math.pow(2, 8 * storageType) - getValueFromMemory(i);
+                    crossedValue = Math.pow(2, 8 * storageType) - getValueAtByteOffset(table.data[i].getByteOffset());
                 else {
-                    crossedValue -= getValueFromMemory(i);
+                    crossedValue -= getValueAtByteOffset(table.data[i].getByteOffset());
                 }
             }
         }
 
+        if (userLevel > getSettings().getUserLevel() || (userLevel >= 5 && !getSettings().isSaveDebugTables())) {
+            LOGGER.warn("saveBinValueInFile: BLOCKED by userLevel check — tableUserLevel=" + userLevel
+                    + " settingsUserLevel=" + getSettings().getUserLevel()
+                    + " isSaveDebugTables=" + getSettings().isSaveDebugTables()
+                    + " table=" + table.getName() + " cell=" + logicalIndex);
+        }
         if (userLevel <= getSettings().getUserLevel() && (userLevel < 5 || getSettings().isSaveDebugTables()) ) {
                 // determine output byte values
                 byte[] output;
@@ -315,16 +349,16 @@ public class DataCell implements Serializable  {
                             tempBitMask = (tempBitMask & (0xFF << 8 * (byteLength - 1 - z))) >> 8*(byteLength - 1 - z);
 
                             // Delete old bits
-                            binData[index * byteLength + z + storageAddress - ramOffset] &= ~tempBitMask;
+                            binData[this.byteOffset + z + storageAddress - ramOffset] &= ~tempBitMask;
 
                             // Overwrite
-                            binData[index * byteLength + z + storageAddress - ramOffset] |= output[z];
+                            binData[this.byteOffset + z + storageAddress - ramOffset] |= output[z];
                         }
                     }
                     //No Masking
                     else {
                         for (int z = 0; z < byteLength; z++) { // insert into file
-                            binData[index * byteLength + z + storageAddress - ramOffset] = output[z];
+                            binData[this.byteOffset + z + storageAddress - ramOffset] = output[z];
                         }
                     }
 
@@ -333,13 +367,13 @@ public class DataCell implements Serializable  {
                     output = RomAttributeParser.floatToByte((float) getBinValue(), endian, table.getMemModelEndian());
 
                     for (int z = 0; z < 4; z++) { // insert in to file
-                        binData[index * 4 + z + storageAddress - ramOffset] = output[z];
+                        binData[this.byteOffset + z + storageAddress - ramOffset] = output[z];
                     }
                 }
         }
 
         //On the Bosch substract model, we need to update all previous cells, because they depend on our value
-        if (isBoschSubtract && index > 0) table.data[index-1].saveBinValueInFile();
+        if (isBoschSubtract && logicalIndex > 0) table.data[logicalIndex - 1].saveBinValueInFile();
 
         checkForDataUpdates();
     }
@@ -371,7 +405,7 @@ public class DataCell implements Serializable  {
 
     public static int getMemoryStartAddress(DataCell cell) {
         Table t = cell.getTable();
-        return t.getStorageAddress() + cell.getIndexInTable() * t.getStorageType() - t.getRamOffset();
+        return t.getStorageAddress() + cell.getByteOffset() - t.getRamOffset();
     }
 
     public Settings getSettings()
@@ -460,12 +494,12 @@ public class DataCell implements Serializable  {
         try {
             double result = 0.0;
             if (!"x".equalsIgnoreCase(input)) {
-            	
+
             	// Optimization: If it has no scaling use the value directly
             	if(table.getCurrentScale().getExpression().trim().equalsIgnoreCase("x"))
 				{
 					result = NumberUtil.doubleValue(input);
-				}       	
+				}
             	else if (table.getCurrentScale().getByteExpression() == null) {
                     result = table.getCurrentScale().approximateToByteFunction(NumberUtil.doubleValue(input), table.getStorageType(), table.isSignedData());
                 }
@@ -477,12 +511,24 @@ public class DataCell implements Serializable  {
                     result = (int) Math.round(result);
                 }
 
+                if (LOGGER.isDebugEnabled())
+                    LOGGER.debug("setRealValue: table=" + table.getName()
+                            + " byteOffset=" + byteOffset + " logicalIndex=" + logicalIndex
+                            + " input=" + input + " result=" + result + " binValue=" + binValue
+                            + " scale=" + (table.getCurrentScale() != null ? table.getCurrentScale().getCategory() : "null"));
+
                 if (binValue != result) {
                     this.setBinValue(result);
+                } else {
+                    LOGGER.warn("setRealValue: no change — binValue already equals result (" + binValue + ") for table=" + table.getName() + " cell=" + logicalIndex);
                 }
             }
         } catch (ParseException e) {
             // Do nothing.  input is null or not a valid number.
+        } catch (RuntimeException e) {
+            LOGGER.error("setRealValue: unexpected exception for table=" + table.getName()
+                    + " cell=" + logicalIndex + " input=" + input, e);
+            throw e;
         }
     }
 
@@ -508,7 +554,15 @@ public class DataCell implements Serializable  {
     }
 
     public void setBinValue(double newBinValue) throws UserLevelException {
-        if (binValue == newBinValue || table.locked || table.getName().contains("Checksum Fix")) {
+        if (binValue == newBinValue) {
+            LOGGER.warn("setBinValue: skipped — already equals " + newBinValue + " for table=" + table.getName() + " cell=" + logicalIndex);
+            return;
+        }
+        if (table.locked) {
+            LOGGER.warn("setBinValue: skipped — table locked for table=" + table.getName() + " cell=" + logicalIndex);
+            return;
+        }
+        if (table.getName().contains("Checksum Fix")) {
             return;
         }
 
@@ -519,16 +573,24 @@ public class DataCell implements Serializable  {
 
         // make sure it's in range
         if (checkedValue < minAllowedBin) {
+            LOGGER.warn("setBinValue: clamped " + newBinValue + " up to minAllowedBin=" + minAllowedBin + " table=" + table.getName());
             checkedValue = minAllowedBin;
         }
 
         if (checkedValue > maxAllowedBin) {
+            LOGGER.warn("setBinValue: clamped " + newBinValue + " down to maxAllowedBin=" + maxAllowedBin + " table=" + table.getName());
             checkedValue = maxAllowedBin;
         }
 
         if (binValue == checkedValue) {
+            LOGGER.warn("setBinValue: skipped — after clamping, checkedValue=" + checkedValue + " equals binValue for table=" + table.getName() + " cell=" + logicalIndex);
             return;
         }
+
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("setBinValue: writing " + checkedValue + " to table=" + table.getName()
+                    + " cell=" + logicalIndex + " byteOffset=" + byteOffset
+                    + " addr=" + (table.getStorageAddress() + byteOffset - table.getRamOffset()));
 
         // set bin.
         binValue = checkedValue;
